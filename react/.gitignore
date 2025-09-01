@@ -1,5 +1,5 @@
 # =============================================================================
-# GITIGNORE - SYSTÈME DE GESTION CLINIQUE (REACT + VITE)
+# GITIGNORE - GESTION DE STAGE (REACT + VITE + TYPESCRIPT)
 # =============================================================================
 
 # =============================================================================
@@ -162,7 +162,7 @@ Thumbs.db
 desktop.ini
 
 # =============================================================================
-# PROJECT SPECIFIC - CLINIQUE
+# PROJECT SPECIFIC - GESTION DE STAGE
 # =============================================================================
 # Fichiers de données temporaires
 *.json.bak
@@ -171,11 +171,6 @@ desktop.ini
 # Fichiers de configuration locale
 config.local.js
 config.local.json
-
-# Fichiers de sauvegarde de base de données
-*.sql
-*.sqlite
-*.db
 
 # Fichiers de logs d'application
 app.log
@@ -189,6 +184,15 @@ image-cache/
 # Fichiers de téléchargement temporaires
 downloads/
 uploads/temp/
+
+# Fichiers de candidatures temporaires
+temp-candidatures/
+temp-cv/
+temp-lettres/
+
+# Fichiers de test et développement
+test-enterprises.js
+test-data/
 
 # =============================================================================
 # SECURITY FILES
@@ -206,6 +210,10 @@ credentials.json
 auth.json
 .env.production
 .env.staging
+
+# Fichiers d'API keys et tokens
+api-keys.json
+tokens.json
 
 # =============================================================================
 # PERFORMANCE FILES
@@ -253,6 +261,12 @@ appveyor.yml
 .vite/
 # Vite preview cache
 .vite-preview/
+
+# =============================================================================
+# TYPESCRIPT SPECIFIC
+# =============================================================================
+# TypeScript build cache
+*.tsbuildinfo
 
 # =============================================================================
 # DEVELOPMENT TOOLS
