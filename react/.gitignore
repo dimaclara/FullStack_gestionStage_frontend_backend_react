@@ -162,6 +162,30 @@ Thumbs.db
 desktop.ini
 
 # =============================================================================
+# JAVA/SPRING BOOT BUILD FILES
+# =============================================================================
+# Maven build directory
+target/
+# Gradle build directory
+build/
+# Compiled class files
+*.class
+# JAR files
+*.jar
+# WAR files
+*.war
+# EAR files
+*.ear
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+# Maven local repository
+.m2/
+# Gradle wrapper
+gradle/wrapper/gradle-wrapper.jar
+# Gradle cache
+.gradle/
+
+# =============================================================================
 # PROJECT SPECIFIC - GESTION DE STAGE
 # =============================================================================
 # Fichiers de données temporaires
