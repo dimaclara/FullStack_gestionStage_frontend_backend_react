@@ -134,11 +134,6 @@ const StudentDetail: React.FC = () => {
                         </div>
                       )}
                       
-                      {/* Debug: Afficher toutes les propriétés disponibles */}
-                      <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
-                        <h4 className="font-semibold mb-1">Données disponibles:</h4>
-                        <pre className="text-xs overflow-auto">{JSON.stringify(student, null, 2)}</pre>
-                      </div>
                     </div>
                   </div>
                 </div>

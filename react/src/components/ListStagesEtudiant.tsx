@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import EtudiantHeader from './EtudiantHeader';
 import egLogo from '../assets/eg-logo.jpg'; // à remplacer par tes assets réels
 
-import { getApprovedOffers } from '../api/studentApi';
+import { getApprovedOffers, filterOffers } from '../api/studentApi';
 import type { OfferResponseDto } from '../types/offer';
 
 // Mock data au format backend (fallback si API vide)
@@ -43,22 +43,121 @@ const mockOffers: OfferResponseDto[] = [
 
 export default function ListStagesEtudiant() {
   const [offers, setOffers] = useState<OfferResponseDto[]>([]);
+  const [filteredOffers, setFilteredOffers] = useState<OfferResponseDto[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [filterLoading, setFilterLoading] = useState(false);
+  
+  // États des filtres
+  const [filters, setFilters] = useState({
+    remote: false,
+    onSite: false,
+    paying: null as boolean | null,
+    typeOfInternship: [] as string[],
+    status: [] as string[]
+  });
+  
   const navigate = useNavigate();
+
+  // Fonction pour appliquer les filtres
+  const applyFilters = async () => {
+    setFilterLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.remote) params.append('remote', 'true');
+      if (filters.onSite) params.append('onSite', 'true');
+      if (filters.paying !== null) params.append('paying', filters.paying.toString());
+      
+      const response = await filterOffers(filters.paying || undefined, filters.remote);
+      const filteredData = response?.data as OfferResponseDto[] || [];
+      
+      // Filtrer par type de stage si sélectionné
+      let finalFiltered = filteredData;
+      if (filters.typeOfInternship.length > 0) {
+        finalFiltered = finalFiltered.filter(offer => 
+          filters.typeOfInternship.includes(offer.typeOfInternship || '')
+        );
+      }
+      
+      // Filtrer par statut si sélectionné
+      if (filters.status.length > 0) {
+        finalFiltered = finalFiltered.filter(offer => 
+          filters.status.includes(offer.status || '')
+        );
+      }
+      
+      setFilteredOffers(finalFiltered);
+    } catch (error) {
+      console.error('Erreur lors du filtrage:', error);
+      setFilteredOffers([]);
+    } finally {
+      setFilterLoading(false);
+    }
+  };
+
+  // Fonction pour réinitialiser les filtres
+  const resetFilters = () => {
+    setFilters({
+      remote: false,
+      onSite: false,
+      paying: null,
+      typeOfInternship: [],
+      status: []
+    });
+    setFilteredOffers(offers);
+  };
+
+  // Fonction pour gérer les changements de filtres
+  const handleFilterChange = (filterType: string, value: any) => {
+    setFilters(prev => {
+      const newFilters = { ...prev };
+      
+      if (filterType === 'remote' || filterType === 'onSite') {
+        newFilters[filterType] = value;
+      } else if (filterType === 'paying') {
+        newFilters.paying = value;
+      } else if (filterType === 'typeOfInternship') {
+        if (newFilters.typeOfInternship.includes(value)) {
+          newFilters.typeOfInternship = newFilters.typeOfInternship.filter(t => t !== value);
+        } else {
+          newFilters.typeOfInternship = [...newFilters.typeOfInternship, value];
+        }
+      } else if (filterType === 'status') {
+        if (newFilters.status.includes(value)) {
+          newFilters.status = newFilters.status.filter(s => s !== value);
+        } else {
+          newFilters.status = [...newFilters.status, value];
+        }
+      }
+      
+      return newFilters;
+    });
+  };
 
   useEffect(() => {
     getApprovedOffers()
       .then(res => {
         const apiOffers = res?.data as OfferResponseDto[] | undefined;
-        setOffers(apiOffers || []);
+        const offersData = apiOffers || [];
+        setOffers(offersData);
+        setFilteredOffers(offersData); // Initialiser les offres filtrées
       })
-      .catch(() => setOffers([]))
+      .catch(() => {
+        setOffers([]);
+        setFilteredOffers([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
+  // Appliquer les filtres quand ils changent
+  useEffect(() => {
+    if (offers.length > 0) {
+      applyFilters();
+    }
+  }, [filters, offers]);
+
   // Recherche sur le titre ou l'entreprise
-  const filteredOffers = offers.filter(offer =>
+  const searchFilteredOffers = filteredOffers.filter(offer =>
     offer.title.toLowerCase().includes(search.toLowerCase()) ||
     offer.enterprise.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -70,34 +169,148 @@ export default function ListStagesEtudiant() {
         {/* Sidebar de filtres */}
         <aside className="hidden md:flex flex-col items-start min-w-[210px] max-w-[260px] mt-12 mr-4 rounded-xl shadow-lg px-7 py-8 gap-6">
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-[var(--color-neutre9)] text-base">Filter</span>
-            <label className="inline-flex relative items-center cursor-pointer ml-2">
-              <input type="checkbox" className="sr-only peer" disabled aria-label="Activer le filtre" />
-              <div className="w-7 h-3 bg-gray-200 rounded-full peer peer-focus:ring-1 peer-focus:ring-[#b79056] dark:bg-gray-700 peer-checked:bg-[#b79056] after:content-[''] after:absolute after:top-0.8 after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-[#b79056]" />
-            </label>
+            <span className="text-[var(--color-neutre9)] text-base">Filtres</span>
+            <button
+              onClick={resetFilters}
+              className="text-xs text-[#b79056] hover:underline cursor-pointer"
+              disabled={filterLoading}
+            >
+              Réinitialiser
+            </button>
           </div>
+          
           <div className="mb-4">
             <div className="text-xs text-[var(--color-neutre9)] font-semibold mb-2">Location</div>
             <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="checkbox" disabled className="accent-[#b79056]" />En remote</label>
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="checkbox" disabled className="accent-[#b79056]" />Sur site</label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.remote}
+                  onChange={(e) => handleFilterChange('remote', e.target.checked)}
+                  disabled={filterLoading}
+                />
+                En remote
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.onSite}
+                  onChange={(e) => handleFilterChange('onSite', e.target.checked)}
+                  disabled={filterLoading}
+                />
+                Sur site
+              </label>
             </div>
           </div>
+          
           <div className="mb-4">
             <div className="text-xs text-[var(--color-neutre9)] font-semibold mb-2">Payant</div>
             <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="radio" name="payant" disabled className="accent-[#b79056]" />Non</label>
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="radio" name="payant" disabled className="accent-[#b79056]" />Oui</label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="payant" 
+                  className="accent-[#b79056]" 
+                  checked={filters.paying === false}
+                  onChange={() => handleFilterChange('paying', false)}
+                  disabled={filterLoading}
+                />
+                Non
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="payant" 
+                  className="accent-[#b79056]" 
+                  checked={filters.paying === true}
+                  onChange={() => handleFilterChange('paying', true)}
+                  disabled={filterLoading}
+                />
+                Oui
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="payant" 
+                  className="accent-[#b79056]" 
+                  checked={filters.paying === null}
+                  onChange={() => handleFilterChange('paying', null)}
+                  disabled={filterLoading}
+                />
+                Tous
+              </label>
             </div>
           </div>
-          <div>
+          
+          <div className="mb-4">
             <div className="text-xs text-[var(--color-neutre9)] font-semibold mb-2">Type de stage</div>
             <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="checkbox" disabled className="accent-[#b79056]" />Initiation</label>
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="checkbox" disabled className="accent-[#b79056]" />Perfectionnement</label>
-              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)]"><input type="checkbox" disabled className="accent-[#b79056]" />Pré-emploi</label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.typeOfInternship.includes('Initiation')}
+                  onChange={() => handleFilterChange('typeOfInternship', 'Initiation')}
+                  disabled={filterLoading}
+                />
+                Initiation
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.typeOfInternship.includes('Perfectionnement')}
+                  onChange={() => handleFilterChange('typeOfInternship', 'Perfectionnement')}
+                  disabled={filterLoading}
+                />
+                Perfectionnement
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.typeOfInternship.includes('Pré-emploi')}
+                  onChange={() => handleFilterChange('typeOfInternship', 'Pré-emploi')}
+                  disabled={filterLoading}
+                />
+                Pré-emploi
+              </label>
             </div>
           </div>
+          
+          <div>
+            <div className="text-xs text-[var(--color-neutre9)] font-semibold mb-2">Statut du stage</div>
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.status.includes('APPROVED')}
+                  onChange={() => handleFilterChange('status', 'APPROVED')}
+                  disabled={filterLoading}
+                />
+                Approuvé
+              </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--color-neutre9)] cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="accent-[#b79056]" 
+                  checked={filters.status.includes('REJECTED')}
+                  onChange={() => handleFilterChange('status', 'REJECTED')}
+                  disabled={filterLoading}
+                />
+                Rejeté
+              </label>
+            </div>
+          </div>
+          
+          {filterLoading && (
+            <div className="text-xs text-[var(--color-jaune)] text-center">
+              Application des filtres...
+            </div>
+          )}
         </aside>
         {/* Section recherche + offres */}
         <section className="flex-1 w-full max-w-[800px] mt-8">
@@ -107,25 +320,35 @@ export default function ListStagesEtudiant() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <input
-              type="text"
-              placeholder="Saisir ici pour rechercher un stage"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full mb-5 px-4 py-2 border-none bg-[var(--color-neutre95)] text-[var(--color-neutre2-paragraphe)] text-base text-center shadow focus:outline-none focus:ring-2 focus:ring-[#b79056] placeholder-[var(--color-neutre2-paragraphe)]"
-              style={{ fontFamily: 'inherit', letterSpacing: '0.01em' }}
-            />
+            <div className="flex flex-col gap-3 mb-5">
+              <input
+                type="text"
+                placeholder="Saisir ici pour rechercher un stage"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full px-4 py-2 border-none bg-[var(--color-neutre95)] text-[var(--color-neutre2-paragraphe)] text-base text-center shadow focus:outline-none focus:ring-2 focus:ring-[#b79056] placeholder-[var(--color-neutre2-paragraphe)]"
+                style={{ fontFamily: 'inherit', letterSpacing: '0.01em' }}
+              />
+                             {!loading && (
+                 <div className="text-xs text-[var(--color-neutre9)] text-center">
+                   {searchFilteredOffers.length} offre{searchFilteredOffers.length !== 1 ? 's' : ''} trouvée{searchFilteredOffers.length !== 1 ? 's' : ''}
+                   {filters.remote || filters.onSite || filters.paying !== null || filters.typeOfInternship.length > 0 || filters.status.length > 0 ? ' avec les filtres appliqués' : ''}
+                 </div>
+               )}
+            </div>
             <div className="flex flex-col gap-7">
               {loading ? (
                 <div className="py-16 text-center text-[var(--color-jaune)] text-lg">Chargement des offres...</div>
-              ) : offers.length === 0 ? (
-                <div className="py-16 text-center text-[var(--color-jaune)] text-lg">
-                  Vous êtes déjà en stage. Vous ne pouvez plus consulter les offres disponibles.
-                </div>
               ) : filteredOffers.length === 0 ? (
-                <div className="py-16 text-center text-[var(--color-jaune)] text-lg">Aucune offre trouvée pour votre recherche.</div>
+                searchFilteredOffers.length === 0 && search ? (
+                  <div className="py-16 text-center text-[var(--color-jaune)] text-lg">Aucune offre trouvée pour votre recherche.</div>
+                ) : (
+                  <div className="py-16 text-center text-[var(--color-jaune)] text-lg">
+                    {offers.length === 0 ? 'Aucune offre de stage disponible' : 'Aucune offre ne correspond à vos critères de filtrage'}
+                  </div>
+                )
               ) : (
-                filteredOffers.map((offer) => (
+                searchFilteredOffers.map((offer) => (
                   <motion.div
                     key={offer.id}
                     className="flex flex-row items-stretch bg-[var(--color-light)] rounded-xl shadow-lg border border-[#e1d3c1] overflow-hidden hover:bg-[var(--color-light)] transition-colors cursor-pointer"

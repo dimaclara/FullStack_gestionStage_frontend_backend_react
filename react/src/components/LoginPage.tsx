@@ -40,11 +40,11 @@ const LoginPage = () => {
         clearError();
         // Redirection automatique selon le rôle
         if (role === 'STUDENT') {
-          navigate('/dashboard-etudiant');
+          navigate('/etudiant/stages');
         } else if (role === 'TEACHER') {
           navigate('/enseignant/offres');
         } else if (role === 'ENTERPRISE') {
-          navigate('/entreprise/dashboard');
+          navigate('/entreprise/offres');
         } else if (role === 'ADMIN') {
           navigate('/admin/dashboard');
         } else {
