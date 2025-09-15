@@ -1,5 +1,6 @@
 package com.internship.management.controllers;
 
+import com.internship.management.dto.StudentResponseDto;
 import com.internship.management.dto.application.ApplicationRequestDto;
 import com.internship.management.dto.application.ApplicationResponseDto;
 import com.internship.management.dto.postOffer.OfferResponseDto;
@@ -13,18 +14,17 @@ import com.internship.management.interfaces.PostOffer;
 import com.internship.management.mappers.PostOfferMapper;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @RestController
 @RequestMapping(path = "api/student")
 @RequiredArgsConstructor
-@Slf4j
 @SecurityRequirement(name = "JWT")
 public class StudentController {
 
@@ -39,8 +39,6 @@ public class StudentController {
         Student student = postOffer.getStudentByEmail(email);
 
         List<Offer> offers = postOffer.getOffersByStatusAndConventionApproved(OfferStatus.APPROVED, ConventionState.APPROVED, student.getDepartment());
-        log.info("value {} ", student.isOnInternship());
-        log.info("value {} ", student.getName());
 
         return student.isOnInternship() ? List.of() : postOfferMapper.toDtoList(offers);
     }
@@ -86,24 +84,26 @@ public class StudentController {
         postOffer.deleteApplicationRejected(application_id);
     }
 
-    @GetMapping("/filter")
-    public List<OfferResponseDto> filter(@RequestParam Boolean paying,
-                                         @RequestParam Boolean remote) {
-
-        if(paying != null && remote != null) return postOfferMapper.toDtoList(postOffer.getOfferByPayingAndRemote(paying, remote));
-        if(paying != null) return postOfferMapper.toDtoList(postOffer.getOfferPaying(paying));
-        if(remote != null)  postOfferMapper.toDtoList(postOffer.getOfferRemote(remote));
-
-        return List.of();
-    }
-
     @PostMapping("{offer_id}/createApplication")
-    public ApplicationResponseDto create(@ModelAttribute ApplicationRequestDto applicationRequestDto, @PathVariable Long offer_id){
+    public ResponseEntity<?> create(@ModelAttribute ApplicationRequestDto applicationRequestDto, @PathVariable Long offer_id){
 
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Student student = postOffer.getStudentByEmail(email);
+
+        if (student.isOnInternship()) {
+            return ResponseEntity.badRequest().body("you are on internship and cannot apply anymore.");
+        }
+
+        List<Application> allApplications = student.getApplications();
+        boolean alreadyApplied = allApplications.stream()
+            .anyMatch(app -> app.getOffer().getId().equals(offer_id) && 
+                           (app.getState() == ApplicationState.PENDING || app.getState() == ApplicationState.APPROVED));
+        
+        if (alreadyApplied) {
+            return ResponseEntity.badRequest().body("you already applied for this offer");
+        }
 
         Application application = postOfferMapper.toEntity(applicationRequestDto);
-        Student student = postOffer.getStudentByEmail(email);
         application.setStudent(student);
 
         Offer offer = postOffer.getOfferById(offer_id);
@@ -113,10 +113,10 @@ public class StudentController {
 
         postOffer.saveApplication(application);
 
-        String enterpriseMsg = "New application received for the offer: " + offer.getTitle();
+        String enterpriseMsg = " Nouvelle candidature reçu pour l'offre: " + offer.getTitle();
         notificationInterface.sendNotification(enterprise, enterpriseMsg);
 
-        return postOfferMapper.toDto(application);
+        return ResponseEntity.ok(postOfferMapper.toDto(application));
     }
 
     @PutMapping("{application_id}/updateStudentStatus")
@@ -128,7 +128,13 @@ public class StudentController {
         Application application = postOffer.getApplicationApprovedById(application_id);
 
         if(applicationAccepted) {
+
             student.setOnInternship(true);
+            postOffer.saveUser(student);
+
+            application.setStudent(student);
+            postOffer.saveApplication(application);
+
         }
 
         return ResponseEntity.ok(postOfferMapper.toDto(application));
@@ -167,9 +173,38 @@ public class StudentController {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Student student = postOffer.getStudentByEmail(email);
 
-        student.setGithubLink(linkedinRequestDto.getLinkedin());
+        student.setLinkedinLink(linkedinRequestDto.getLinkedin());
         postOffer.saveUser(student);
 
-        return  ResponseEntity.ok().body("github link updated successfully");
+        return  ResponseEntity.ok().body("linkedin link updated successfully");
+    }
+    
+    @GetMapping("/status")
+    public ResponseEntity<?> getStudentStatus() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Student student = postOffer.getStudentByEmail(email);
+        
+        if (student.isOnInternship()) {
+            return ResponseEntity.ok().body(Map.of(
+                "onInternship", true,
+                "message", "Vous êtes en stage",
+                "canApply", false
+            ));
+        }
+        
+        return ResponseEntity.ok().body(Map.of(
+            "onInternship", false,
+            "message", "Vous pouvez candidater aux offres",
+            "canApply", true
+        ));
+    }
+    
+    @GetMapping("/profile")
+    public ResponseEntity<StudentResponseDto> getStudentProfile() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Student student = postOffer.getStudentByEmail(email);
+        
+        StudentResponseDto profileDto = postOfferMapper.toDtoStudent(student);
+        return ResponseEntity.ok(profileDto);
     }
 }

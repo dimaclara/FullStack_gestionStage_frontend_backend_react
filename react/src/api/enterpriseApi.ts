@@ -20,9 +20,16 @@ export const createOffer = async (offer: OfferRequestDto) => {
     startDate: offer.startDate || '',
     endDate: offer.endDate || ''
   };
-  return await api.post('/api/enterprise/createOffer', data, {
-    headers: getAuthHeaders()
-  });
+  try {
+    return await api.post('/api/enterprise/createOffer', data, {
+      headers: getAuthHeaders()
+    });
+  } catch (error: any) {
+    if (error.response?.status === 403) {
+      throw new Error('Votre entreprise doit être approuvée comme partenaire pour créer des offres');
+    }
+    throw error;
+  }
 };
 
 // Ajouter la convention PDF à une offre existante
@@ -54,7 +61,7 @@ export const getEnterpriseOffers = () =>
 
 // Récupérer le logo de l'entreprise (courant)
 export const getEnterpriseLogo = () =>
-  api.get('/profilePhoto/getEnterpriseLogo', {
+  api.get('/downloadFiles/getEnterpriseLogo', {
     responseType: 'blob',
     headers: getAuthHeaders()
   });
@@ -211,40 +218,36 @@ export const getEnterpriseLogoById = async (enterpriseId: number) => {
 // Récupérer les informations de l'entreprise connectée
 export const getCurrentEnterpriseInfo = async () => {
   try {
-    // Essayer d'abord avec un endpoint potentiel
-    return await api.get('/api/enterprise/profile', {
-      headers: getAuthHeaders()
-    });
-  } catch (error) {
-    console.log('Endpoint /api/enterprise/profile non disponible, utilisation des offres pour récupérer les infos');
-    try {
-      // Fallback: récupérer les infos via les offres de l'entreprise
-      const offersResponse = await getEnterpriseOffers();
-      if (offersResponse.data && offersResponse.data.length > 0) {
-        const firstOffer = offersResponse.data[0];
-        if (firstOffer.enterprise) {
-          return { data: firstOffer.enterprise };
-        }
-      }
-      throw new Error('Aucune offre trouvée pour récupérer les infos entreprise');
-    } catch (fallbackError) {
-      console.log('Fallback échoué, utilisation de données par défaut');
-      // Données par défaut si aucun endpoint ne fonctionne
-      return {
-        data: {
-          id: 1,
-          name: 'Mon Entreprise',
-          email: 'contact@monentreprise.com',
-          sectorOfActivity: 'Secteur d\'activité',
-          matriculation: 'ENT-001',
-          country: 'Cameroun',
-          city: 'Yaoundé',
-          hasLogo: { hasLogo: false },
-          inPartnership: true
-        }
-      };
+    return await api.get('/api/enterprise/info', { headers: getAuthHeaders() });
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error('Session expirée. Veuillez vous reconnecter.');
     }
+    throw new Error(error.response?.data?.message || 'Erreur lors de la récupération des informations');
   }
+};
+
+// Mettre à jour le contact
+export const updateContact = async (contact: string) => {
+  return await api.patch('/api/enterprise/updateContact', { contact }, {
+    headers: getAuthHeaders()
+  });
+};
+
+// Mettre à jour la localisation
+export const updateLocation = async (location: string) => {
+  return await api.patch('/api/enterprise/updateLocation', { location }, {
+    headers: getAuthHeaders()
+  });
+};
+
+// Mettre à jour le logo
+export const updateLogo = async (enterpriseId: number, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return await api.put(`/api/enterprise/updateLogo/${enterpriseId}`, formData, {
+    headers: getAuthHeaders()
+  });
 };
 
 

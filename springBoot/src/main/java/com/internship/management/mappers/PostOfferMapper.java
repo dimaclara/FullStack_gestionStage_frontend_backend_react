@@ -52,6 +52,10 @@ public interface PostOfferMapper {
         dto.setEmail(e.getEmail());
         dto.setName(e.getName());
         dto.setMatriculation(e.getMatriculation());
+        dto.setCountry(e.getCountry());
+        dto.setCity(e.getCity());
+        dto.setContact(e.getContact());
+        dto.setLocation(e.getLocation());
         dto.setHasLogo(hasLogoDto);
         dto.setInPartnership(e.isInPartnership());
         dto.setSectorOfActivity(e.getSectorOfActivity());
@@ -149,6 +153,7 @@ public interface PostOfferMapper {
         hasLogoDto.setHasLogo(e.getLogo() != null);
         return hasLogoDto;
     }
+    StudentResponseDto toDtoStudent(Student student);
 
     List<StudentResponseDto> toDtoStudentList(List<Student> studentList);
 

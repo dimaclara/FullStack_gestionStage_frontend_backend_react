@@ -10,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @Service
@@ -106,21 +108,24 @@ public class OfferServiceImpl implements PostOffer {
         userRepository.save(user);
     }
 
-    public List<Offer> getOfferPaying(boolean paying){
-        return offerRepository.findByPaying(paying);
-    }
-
-    public List<Offer> getOfferRemote(boolean remote){
-        return offerRepository.findByRemote(remote);
-    }
-
-    public List<Offer> getOfferByPayingAndRemote(boolean paying, boolean remote){
-        return offerRepository.findByPayingAndRemote(paying, remote);
-    }
-
     public Logo getLogoByEnterprise(Enterprise enterprise){
         return logoRepository.findByEnterprise(enterprise)
                 .orElseThrow(() -> new RuntimeException("Logo not found"));
+    }
+
+    public void updateLogo(Long enterpriseId, MultipartFile file) throws IOException {
+
+        Enterprise enterprise = enterpriseRepository.findById(enterpriseId)
+                .orElseThrow(() -> new RuntimeException("Enterprise not found"));
+
+        Logo logo = logoRepository.findByEnterprise(enterprise)
+                .orElse(new Logo());
+
+        logo.setEnterprise(enterprise);
+        logo.setLogo(file.getBytes());
+        logo.setContentType(file.getContentType());
+
+        logoRepository.save(logo);
     }
 
     public Convention getConventionByOfferId(Long offerId){

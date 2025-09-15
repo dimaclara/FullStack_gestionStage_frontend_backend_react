@@ -28,7 +28,7 @@ public class UpdateProfileUser {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Users user = postOffer.getUserByEmail(email);
 
-        user.setPassword(passwordRequestDto.getPassword());
+        user.setPassword(passwordEncoder.encode(passwordRequestDto.getPassword()));
         postOffer.saveUser(user);
         return ResponseEntity.ok().body("password updated successfully");
     }
@@ -50,14 +50,17 @@ public class UpdateProfileUser {
         return ResponseEntity.ok(SecurityContextHolder.getContext().getAuthentication().getName());
     }
 
-    @DeleteMapping("/deleteUserAccount")
-    public ResponseEntity<String> delete(){
-
+    @GetMapping("/getCurrentUser")
+    public ResponseEntity<Users> getCurrentUser(){
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Users user = postOffer.getUserByEmail(email);
-        postOffer.deleteUser(user.getId());
+        return ResponseEntity.ok(user);
+    }
 
-        return ResponseEntity.ok( user.getName() + " deleted successfully");
+    @DeleteMapping("/deleteAccount/{userId}")
+    public ResponseEntity<String> deleteUserById(@PathVariable Long userId){
+        postOffer.deleteUser(userId);
+        return ResponseEntity.ok("User deleted successfully");
     }
 
     @PutMapping("/verifyPassword")

@@ -1,35 +1,18 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import TeacherHeader from '../TeacherHeader';
+import TeacherHeader from './TeacherHeader';
 import AdminHeader from '../admin/AdminHeader';
 import { getOffersToReviewByDepartment, validateOfferAndConvention, downloadConvention } from '../../api/teacherApi';
 import { useLocation } from 'react-router-dom';
-
-interface Offer {
-  id: number;
-  title: string;
-  description: string;
-  domain: string;
-  job: string;
-  typeOfInternship: string;
-  startDate: string;
-  endDate: string;
-  numberOfPlaces: string;
-  durationOfInternship: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  enterprise: {
-    id: number;
-    name: string;
-    sector?: string;
-  };
-}
+import EnterpriseLogo from '../entreprise/EnterpriseLogo';
+import type { OfferResponseDto } from '../../types/offer';
 
 const TeacherOfferDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [offer, setOffer] = useState<Offer | null>(null);
+  const [offer, setOffer] = useState<OfferResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [showApplications, setShowApplications] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
@@ -54,7 +37,7 @@ const TeacherOfferDetail = () => {
         // Sinon, récupérer depuis l'API
         const response = await getOffersToReviewByDepartment();
         const offers = response.data || [];
-        const foundOffer = offers.find((o: Offer) => o.id === Number(id));
+        const foundOffer = offers.find((o: OfferResponseDto) => o.id === Number(id));
         setOffer(foundOffer || null);
       } catch (error) {
         console.error('Erreur:', error);
@@ -77,11 +60,11 @@ const TeacherOfferDetail = () => {
         conventionApproved: true
       });
       setOffer({ ...offer, status: 'APPROVED' });
-      alert('Offre approuvée avec succès');
+      console.log('Offre approuvée avec succès');
       setTimeout(() => navigate(isAdminRoute ? '/admin/offres' : '/enseignant/offres'), 1000);
     } catch (error: any) {
       console.error('Erreur:', error);
-      alert(error.message || 'Erreur lors de l\'approbation');
+      console.error(error.message || 'Erreur lors de l\'approbation');
     } finally {
       setProcessingAction(false);
     }
@@ -97,11 +80,11 @@ const TeacherOfferDetail = () => {
         conventionApproved: false
       });
       setOffer({ ...offer, status: 'REJECTED' });
-      alert('Offre refusée');
+      console.log('Offre refusée');
       setTimeout(() => navigate(isAdminRoute ? '/admin/offres' : '/enseignant/offres'), 1000);
     } catch (error: any) {
       console.error('Erreur:', error);
-      alert(error.message || 'Erreur lors du refus');
+      console.error(error.message || 'Erreur lors du refus');
     } finally {
       setProcessingAction(false);
     }
@@ -124,17 +107,17 @@ const TeacherOfferDetail = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Erreur lors du téléchargement:', error);
-      alert('Erreur lors du téléchargement de la convention');
+      console.error('Erreur lors du téléchargement de la convention');
     }
   };
 
   // Note: Les enseignants ne gèrent pas les candidatures - c'est le rôle des entreprises
   const handleAcceptApplication = async (applicationId: number) => {
-    alert('Les candidatures sont gérées par les entreprises, pas les enseignants.');
+    console.log('Les candidatures sont gérées par les entreprises, pas les enseignants.');
   };
   
   const handleRejectApplication = async (applicationId: number) => {
-    alert('Les candidatures sont gérées par les entreprises, pas les enseignants.');
+    console.log('Les candidatures sont gérées par les entreprises, pas les enseignants.');
   };
 
   const handleToggleApplications = () => {
@@ -162,9 +145,7 @@ const TeacherOfferDetail = () => {
   // Champs mockés
   const postulants = applications.length;
   const places = offer.numberOfPlaces;
-  const badges = ['En présentiel', 'Après interview'];
-  const tags = ['React', 'Node.js', 'Payment APIs', 'Security', 'E-commerce'];
-  const exigences = "L'étudiant doit avoir de bonnes connaissances en développement web et APIs REST";
+  const exigences = offer.requirements || "L'étudiant doit avoir de bonnes connaissances en développement web et APIs REST";
 
   // Déterminer les boutons à afficher selon le statut
   const getStatusBadge = () => {
@@ -226,13 +207,16 @@ const TeacherOfferDetail = () => {
                   <div className="mb-5">
                     <div className="flex flex-row flex-wrap gap-8 items-center mb-2">
                       <div className="text-base text-[var(--color-dark)]">Type de stage <b>{offer.typeOfInternship}</b></div>
-                      <div className="text-base text-[var(--color-dark)]">Stage payant <b>OUI</b></div>
+                      <div className="text-base text-[var(--color-dark)]">Stage payant <b>{offer.paying ? 'OUI' : 'NON'}</b></div>
                       <div className="text-base text-[var(--color-dark)]">🗓️ Période du stage <b>{offer.startDate} - {offer.endDate}</b></div>
                     </div>
                     <div className="flex flex-row flex-wrap gap-2 mb-2">
-                      {badges.map(b => (
-                        <span key={b} className="px-2 py-1 rounded-full text-xs font-medium bg-[#e1d3c1] text-[var(--color-vert)] border border-[var(--color-vert)]">{b}</span>
-                      ))}
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-[#e1d3c1] text-[var(--color-vert)] border border-[var(--color-vert)]">
+                        {offer.remote ? 'En remote' : 'Sur site'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-[#e1d3c1] text-[var(--color-vert)] border border-[var(--color-vert)]">
+                        {offer.paying ? 'Payant' : 'Non payant'}
+                      </span>
                     </div>
                   </div>
                   
@@ -270,26 +254,28 @@ const TeacherOfferDetail = () => {
                 </div>
                 
                 <div className="min-w-[260px] max-w-[320px] flex flex-col items-center p-5 mt-1">
-                  <div className="h-20 w-20 rounded-full mb-2 border border-[#e1d3c1] bg-white flex items-center justify-center">
-                    <span className="text-lg font-bold text-[var(--color-dark)]">
-                      {offer.enterprise.name.substring(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="text-base font-bold text-[var(--color-dark)] text-center mb-1">{offer.enterprise.name}</div>
+                  <EnterpriseLogo 
+                    enterpriseName={offer.enterprise?.name || 'Entreprise'}
+                    enterpriseId={offer.enterprise?.id}
+                    hasLogo={offer.enterprise?.hasLogo?.hasLogo}
+                    size="lg"
+                    className="mb-2"
+                  />
+                  <div className="text-base font-bold text-[var(--color-dark)] text-center mb-1">{offer.enterprise?.name || 'Entreprise'}</div>
                   <div className="flex flex-row gap-2 mb-1">
                     <span role="img" aria-label="flag" className="text-xl">🇳🇬</span>
-                    <span className="text-xs text-[var(--color-dark)]">Nigeria • Lagos</span>
+                    <span className="text-xs text-[var(--color-dark)]">{offer.enterprise?.country || 'Pays'} • {offer.enterprise?.city || 'Ville'}</span>
                   </div>
-                  <div className="text-xs text-[var(--color-dark)] mb-1">{offer.enterprise.sector}</div>
+                  <div className="text-xs text-[var(--color-dark)] mb-1">{offer.enterprise?.sectorOfActivity || 'Secteur'}</div>
                   <div className="text-xs text-[var(--color-dark)] mb-1">Nombre de places <b>{places}</b></div>
                   <div className="text-xs text-[var(--color-dark)] mb-1">Nombre de postulants <b>{postulants}</b></div>
                   <div className="text-xs text-[var(--color-dark)] mb-1">Domaine <b>{offer.domain}</b></div>
-                  <div className="text-xs text-[var(--color-dark)] mb-1">Durée <b>{offer.durationOfInternship} mois</b></div>
-                  <div className="flex flex-wrap gap-2 mt-2 mb-1 justify-center">
-                    {tags.map(t => (
-                      <span key={t} className="bg-[var(--color-vert)] text-white px-2 py-0.5 rounded-full text-xs border border-[var(--color-vert)]">{t}</span>
-                    ))}
-                  </div>
+                  <div className="text-xs text-[var(--color-dark)] mb-1">Durée <b>{(() => {
+                    const start = new Date(offer.startDate).getTime();
+                    const end = new Date(offer.endDate).getTime();
+                    const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
+                    return `${diffDays} jours`;
+                  })()}</b></div>
                 </div>
               </div>
               

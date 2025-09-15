@@ -1,19 +1,22 @@
 
 import './App.css'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import OffersList from './components/teacher/OffersList';
 import EntreprisesList from './components/teacher/EntreprisesList';
 import EnterpriseDetail from './components/teacher/EnterpriseDetail';
 import StudentsList from './components/teacher/StudentsList';
 import StudentDetail from './components/teacher/StudentDetail';
-import CreerOffreEntreprise from './components/CreerOffreEntreprise';
-import ListeOffresEntreprise from './components/ListeOffresEntreprise';
+import CreerOffreEntreprise from './components/entreprise/CreerOffreEntreprise';
+import ListeOffresEntreprise from './components/entreprise/ListeOffresEntreprise';
 import OfferDetail from './components/OfferDetail';
-import CandidaturesEntreprise from './components/CandidaturesEntreprise';
-import DetailCandidature from './components/DetailCandidature';
+import CandidaturesEntreprise from './components/entreprise/CandidaturesEntreprise';
+import DetailCandidature from './components/entreprise/DetailCandidature';
 import ProfilEntreprise from './components/ProfilEntreprise';
 import TeacherOfferDetail from './components/teacher/OfferDetail';
+import DebugTeacher from './components/teacher/DebugTeacher';
 import LoginPage from './components/LoginPage';
+import ResetPassword from './components/ResetPassword';
 import RegisterStepper from './components/RegisterStepper';
 import RegisterSuccess from './components/RegisterSuccess';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -28,37 +31,37 @@ import AdminTeacherDetail from './components/admin/TeacherDetail';
 import AdminStudentsList from './components/admin/StudentsList';
 import AdminStudentDetail from './components/admin/StudentDetail';
 
-import ListStagesEtudiant from './components/ListStagesEtudiant';
-import MonStageEtudiant from './components/MonStageEtudiant';
+import ListStagesEtudiant from './components/etudiant/ListStagesEtudiant';
+import MonStageEtudiant from './components/etudiant/MonStageEtudiant';
 import MonProfil from './components/etudiant/MonProfil';
 import Felicitations from './components/Felicitations';
 // Les dashboards spécifiques n'existent pas, routes simplifiées
 
 
-const App = () => {
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  
   return (
-    <Router>
-      <Routes>
-        {/* Route racine : redirection automatique selon le rôle */}
-        <Route path="/" element={<RoleRedirector />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterStepper />} />
-        <Route path="/register-success" element={<RegisterSuccess />} />
-        <Route path="/stage/:id" element={<StageDetail />} />
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<PageWrapper><RoleRedirector /></PageWrapper>} />
+        <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
+        <Route path="/reset-password" element={<PageWrapper><ResetPassword /></PageWrapper>} />
+        <Route path="/register" element={<PageWrapper><RegisterStepper /></PageWrapper>} />
+        <Route path="/register-success" element={<PageWrapper><RegisterSuccess /></PageWrapper>} />
+        <Route path="/stage/:id" element={<PageWrapper><StageDetail /></PageWrapper>} />
 
-        {/* Route protégée pour les étudiants */}
         <Route element={<ProtectedRoute allowedRoles={['STUDENT', 'ADMIN']} />}> 
-          <Route path="/etudiant/stages" element={<ListStagesEtudiant />} />
-          <Route path="/etudiant/mon-stage" element={<MonStageEtudiant />} />
-          <Route path="/etudiant/profil" element={<MonProfil />} />
-          <Route path="/etudiant/parametres" element={<UserSettings />} />
+          <Route path="/etudiant/stages" element={<PageWrapper><ListStagesEtudiant /></PageWrapper>} />
+          <Route path="/etudiant/mon-stage" element={<PageWrapper><MonStageEtudiant /></PageWrapper>} />
+          <Route path="/etudiant/profil" element={<PageWrapper><MonProfil /></PageWrapper>} />
+          <Route path="/etudiant/parametres" element={<PageWrapper><UserSettings /></PageWrapper>} />
         </Route>
 
-        {/* Page de félicitations après création de compte */}
-        <Route path="/felicitations" element={<Felicitations />} />
+        <Route path="/felicitations" element={<PageWrapper><Felicitations /></PageWrapper>} />
 
-        {/* Routes enseignant (protégées) */}
         <Route element={<ProtectedRoute allowedRoles={['TEACHER', 'ADMIN']} />}>
+          <Route path="/enseignant/debug" element={<DebugTeacher />} />
           <Route path="/enseignant/offres" element={<OffersList />} />
           <Route path="/enseignant/offres/:id" element={<TeacherOfferDetail />} />
           <Route path="/enseignant/entreprises" element={<EntreprisesList />} />
@@ -96,6 +99,28 @@ const App = () => {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+    </AnimatePresence>
+  );
+};
+
+const PageWrapper = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="min-h-screen"
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const App = () => {
+  return (
+    <Router>
+      <AnimatedRoutes />
     </Router>
   );
 };

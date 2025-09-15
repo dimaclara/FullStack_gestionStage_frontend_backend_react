@@ -2,8 +2,10 @@ package com.internship.management.controllers;
 
 
 import com.internship.management.dto.application.ApplicationResponseDto;
+import com.internship.management.dto.postOffer.EnterpriseResponseDto;
 import com.internship.management.dto.postOffer.OfferRequestDto;
 import com.internship.management.dto.postOffer.OfferResponseDto;
+import com.internship.management.dto.profile.UpdateEnterpriseProfile;
 import com.internship.management.entities.*;
 import com.internship.management.enums.ApplicationState;
 import com.internship.management.interfaces.NotificationInterface;
@@ -11,7 +13,7 @@ import com.internship.management.interfaces.PostOffer;
 import com.internship.management.mappers.PostOfferMapper;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 
-@Slf4j
+
 @RestController
 @RequestMapping(path = "api/enterprise")
 @RequiredArgsConstructor
@@ -63,7 +65,7 @@ public class EnterpriseController {
         List<Teacher> teachers = postOffer.getTeachersByDepartment(offer.getDomain());
 
         for (Teacher teacher : teachers ) {
-            notificationInterface.sendNotification(teacher, "New offers arrival");
+            notificationInterface.sendNotification(teacher, "Nouvel arrivage d'offres");
         }
 
         return ResponseEntity.ok(postOfferMapper.toDto(offer));
@@ -106,19 +108,65 @@ public class EnterpriseController {
         if(approved){
 
             application.setState(ApplicationState.APPROVED);
-            msg = "Your application has been " + application.getState() + " and reviewed by the " +
-                    enterprise.getName() + " company";
+            msg = "Votre candidature a été approuvée et examiner par l'entreprise " +
+                    enterprise.getName();
             notificationInterface.sendNotification(student, msg);
-            log.info("Application has been {} ",  application.getState());
 
         }else{
 
             application.setState(ApplicationState.REJECTED);
-            msg = "Your application has been " + application.getState() + " and reviewed by the " +
-                    enterprise.getName() + " company";
+            msg = "Votre candidature a été rejetée et examiner par l'entreprise " +
+                    enterprise.getName();
             notificationInterface.sendNotification(student, msg);
         }
 
         return  ResponseEntity.ok().body(msg);
+    }
+
+    @GetMapping("/info")
+    public ResponseEntity<EnterpriseResponseDto> getCurrentEnterpriseInfo() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Enterprise enterprise = postOffer.getByEnterpriseEmail(email);
+        return ResponseEntity.ok(postOfferMapper.toDtoEnterprise(enterprise));
+    }
+
+    @PatchMapping("/updateContact")
+    public ResponseEntity<String> updateContact(@RequestBody UpdateEnterpriseProfile updateEnterpriseProfile) {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Enterprise enterprise = postOffer.getByEnterpriseEmail(email);
+
+        enterprise.setContact(updateEnterpriseProfile.getContact());
+        postOffer.saveUser(enterprise);
+
+        return ResponseEntity.ok().body(enterprise.getName() + " updated contact successfully");
+    }
+
+    @PatchMapping("/updateLocation")
+    public ResponseEntity<String> updateLocation(@RequestBody UpdateEnterpriseProfile updateEnterpriseProfile) {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Enterprise enterprise = postOffer.getByEnterpriseEmail(email);
+
+        enterprise.setLocation(updateEnterpriseProfile.getLocation());
+        postOffer.saveUser(enterprise);
+
+        return ResponseEntity.ok().body(enterprise.getName() + " updated location successfully");
+    }
+
+    @PutMapping("/updateLogo/{enterpriseId}")
+    public ResponseEntity<String> updateLogo(
+            @PathVariable Long enterpriseId,
+            @RequestParam("file") MultipartFile file) {
+
+        try {
+
+            postOffer.updateLogo(enterpriseId, file);
+            return ResponseEntity.ok("Logo updated successfully");
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Error: " + e.getMessage());
+        }
     }
 }

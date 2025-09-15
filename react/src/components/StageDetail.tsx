@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { getStageDetail, downloadConvention, submitApplication } from "../api/stageApi";
-import { getPendingApplicationsOfStudent, getApplicationsApprovedOfStudent } from "../api/studentApi";
 import type { OfferResponseDto } from '../types/offer';
 import EtudiantHeader from './EtudiantHeader';
+import EnterpriseLogo from './entreprise/EnterpriseLogo';
+import { useStudentStatus } from '../hooks/useStudentStatus';
+import { validateApplicationEligibility, getApplicationButtonText, isApplicationButtonDisabled } from '../utils/applicationUtils';
+import ConfirmationModal from './admin/ConfirmationModal';
 
 const StageDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [offer, setOffer] = useState<OfferResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,70 +20,36 @@ const StageDetail: React.FC = () => {
   const [coverLetterFile, setCoverLetterFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [hasApplied, setHasApplied] = useState(false);
-  const [hasApprovedApplication, setHasApprovedApplication] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    message: string;
+    type: 'info' | 'danger' | 'warning';
+  } | null>(null);
+  const studentStatus = useStudentStatus();
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     
-    // Vérifier les candidatures existantes
-    const checkApplications = async () => {
-      try {
-        const [pendingApps, approvedApps] = await Promise.all([
-          getPendingApplicationsOfStudent(),
-          getApplicationsApprovedOfStudent()
-        ]);
-        
-        const currentOfferId = Number(id);
-        const hasPending = pendingApps.data?.some((app: any) => app.offer?.id === currentOfferId);
-        const hasApproved = approvedApps.data?.some((app: any) => app.offer?.id === currentOfferId);
-        
-        setHasApplied(hasPending || hasApproved);
-        setHasApprovedApplication(hasApproved);
-      } catch (error) {
-        console.error('Erreur lors de la vérification des candidatures:', error);
-      }
-    };
-    
-    checkApplications();
+
     
     getStageDetail(Number(id))
       .then((offerData: OfferResponseDto) => {
+        console.log('=== DONNÉES OFFRE REÇUES ===');
+        console.log('Offre complète:', offerData);
+        console.log('Entreprise:', offerData.enterprise);
+        console.log('Nom entreprise:', offerData.enterprise?.name);
+        console.log('Pays:', offerData.enterprise?.country);
+        console.log('Ville:', offerData.enterprise?.city);
+        console.log('Secteur:', offerData.enterprise?.sectorOfActivity);
+        console.log('=== FIN DONNÉES ===');
         setOffer(offerData);
         setError(null);
       })
-      .catch(() => {
-        // fallback mockdata conforme à OfferResponseDto
-        setOffer({
-          id: Number(id),
-          title: 'Dev Three.js Canvas 3D (WebGL) SVG',
-          startDate: new Date().toISOString(),
-          endDate: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString(),
-          domain: 'web dev',
-          description: 'Lorem ipsum dolor sit amet consectetur. Hendrerit molestie aliquam duis sagittis elit amet',
-          status: 'APPROVED',
-          typeOfInternship: 'Perfectionnement',
-          job: 'Stagiaire',
-          requirements: 'Avoir un PC',
-          numberOfPlaces: '2',
-          durationOfInternship: 3,
-          paying: true,
-          remote: false,
-          enterprise: {
-            id: 1,
-            name: 'LZ customs',
-            email: 'lz@customs.com',
-            sectorOfActivity: 'Entreprise de services',
-            matriculation: 'LZ-2025',
-            country: 'Cameroun',
-            city: 'Yaoundé',
-            hasLogo: { hasLogo: false },
-            inPartnership: true,
-          },
-          convention: undefined,
-        } as OfferResponseDto);
-        setError(null);
+      .catch((error) => {
+        console.error('Erreur lors du chargement de l\'offre:', error);
+        setError('Offre non trouvée');
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -87,12 +57,8 @@ const StageDetail: React.FC = () => {
   if (loading) return <div className="py-16 text-center text-[var(--color-jaune)] text-lg">Chargement...</div>;
   if (error || !offer) return <div className="py-16 text-center text-red-600 text-lg">{error || "Stage introuvable."}</div>;
 
-  // Champs mockés uniquement si absents du backend
-  const postulants = 5;
-  const places = 2;
-  const badges = ['En présentiel', 'Après interview'];
-  const tags = ['Cisco', 'Equipement réseau', 'Réseau', 'IoT', 'Configuration routeur', 'Cloud computing'];
-  const exigences = "L'étudiant doit avoir de son propre PC";
+  const tags = [offer.domain, offer.typeOfInternship].filter(Boolean);
+  const exigences = offer.requirements || 'Aucune exigence spécifiée';
 
   // Fonction de téléchargement de la convention
   const handleDownloadConvention = async () => {
@@ -107,12 +73,27 @@ const StageDetail: React.FC = () => {
       link.click();
       link.parentNode?.removeChild(link);
     } catch {
-      alert('Erreur lors du téléchargement de la convention.');
+      console.error('Erreur lors du téléchargement de la convention.');
     }
   };
 
   // Fonction pour gérer l'affichage du formulaire de candidature
   const handleCandidaterClick = () => {
+    if (!id) return;
+    
+    const offerId = Number(id);
+    const validation = validateApplicationEligibility(offerId, studentStatus);
+    
+    if (!validation.canApply) {
+      setModalConfig({
+        title: 'Candidature impossible',
+        message: validation.message,
+        type: 'warning'
+      });
+      setShowModal(true);
+      return;
+    }
+    
     setShowCandidatureForm(!showCandidatureForm);
   };
 
@@ -134,21 +115,75 @@ const StageDetail: React.FC = () => {
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !cvFile || !coverLetterFile) {
-      alert('Veuillez sélectionner un CV et une lettre de motivation.');
+      setModalConfig({
+        title: 'Fichiers manquants',
+        message: 'Veuillez sélectionner un CV et une lettre de motivation.',
+        type: 'warning'
+      });
+      setShowModal(true);
+      return;
+    }
+
+    const offerId = Number(id);
+    
+    // Vérification finale avant soumission
+    if (studentStatus.hasApplicationForOffer(offerId)) {
+      setModalConfig({
+        title: 'Candidature impossible',
+        message: 'Vous avez déjà candidaté à cette offre. Impossible de candidater 2 fois.',
+        type: 'warning'
+      });
+      setShowModal(true);
+      setShowCandidatureForm(false);
       return;
     }
 
     setSubmitting(true);
     try {
-      await submitApplication(Number(id), cvFile, coverLetterFile);
+      await submitApplication(offerId, cvFile, coverLetterFile);
       setSubmitSuccess(true);
+      // Rafraîchir le statut de l'étudiant
+      await studentStatus.refresh();
+      // Fermer le formulaire et réinitialiser les fichiers
+      setShowCandidatureForm(false);
+      setCvFile(null);
+      setCoverLetterFile(null);
       setTimeout(() => {
-        setShowCandidatureForm(false);
         setSubmitSuccess(false);
+        navigate('/etudiant/mon-stage');
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur lors de la soumission:', error);
-      alert('Erreur lors de la soumission de votre candidature.');
+      console.error('Status:', error?.response?.status);
+      console.error('Message:', error?.response?.data?.message);
+      
+      // Gestion d'erreurs spécifiques
+      if (error?.response?.status === 409 || error?.response?.status === 400 || error?.message?.includes('already applied') || error?.response?.data?.message?.includes('déjà candidaté') || error?.response?.data?.message?.includes('already applied')) {
+        setModalConfig({
+          title: 'Candidature impossible',
+          message: 'Vous avez déjà candidaté à cette offre. Impossible de candidater 2 fois.',
+          type: 'warning'
+        });
+        setShowModal(true);
+        await studentStatus.refresh();
+        setShowCandidatureForm(false);
+      } else if (error?.response?.status === 403) {
+        setModalConfig({
+          title: 'Candidature impossible',
+          message: 'Vous ne pouvez plus candidater car vous êtes déjà en stage.',
+          type: 'warning'
+        });
+        setShowModal(true);
+        await studentStatus.refresh();
+        setShowCandidatureForm(false);
+      } else {
+        setModalConfig({
+          title: 'Erreur',
+          message: error?.response?.data?.message || 'Erreur lors de la soumission de votre candidature.',
+          type: 'danger'
+        });
+        setShowModal(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -162,17 +197,28 @@ const StageDetail: React.FC = () => {
           <div className="w-full bg-[var(--color-light)] shadow-xl p-8 border border-[#e1d3c1] relative rounded-lg">
             <div style={{ position: 'relative', width: '100%' }}>
               <div className="flex flex-row justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-[var(--color-dark)]">Detail de stage</h1>
-                {!hasApplied ? (
+                <div className="flex items-center">
+                  <button 
+                    onClick={() => navigate(-1)}
+                    className="mr-4 p-2 text-[var(--color-dark)] hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <h1 className="text-2xl font-bold text-[var(--color-dark)]">Detail de stage</h1>
+                </div>
+                {!isApplicationButtonDisabled(Number(id || 0), studentStatus) ? (
                   <button 
                     onClick={handleCandidaterClick}
-                    className="bg-[#e1d3c1] text-[var(--color-vert)] px-5 py-2 rounded-lg font-semibold hover:bg-[var(--color-jaune)] transition cursor-pointer"
+                    className="bg-[var(--color-vert)] text-[var(--color-light)] px-5 py-2 rounded-lg font-semibold transition cursor-pointer"
+
                   >
                     {showCandidatureForm ? 'Annuler' : 'Candidater'}
                   </button>
                 ) : (
                   <div className="bg-gray-200 text-gray-600 px-5 py-2 rounded-lg font-semibold">
-                    {hasApprovedApplication ? 'Candidature approuvée' : 'Déjà candidaté'}
+                    {getApplicationButtonText(Number(id || 0), studentStatus)}
                   </div>
                 )}
               </div>
@@ -182,25 +228,28 @@ const StageDetail: React.FC = () => {
                   <div className="text-2xl font-semibold text-[var(--color-dark)] mb-4">{offer.title}</div>
                   
                   <div className="mb-5">
-                    <div className="flex flex-row flex-wrap gap-8 items-center mb-2">
-                      <div className="text-base text-[var(--color-dark)]">Type de stage <b>{offer.typeOfInternship || 'Perfectionnement'}</b></div>
-                      <div className="text-base text-[var(--color-dark)]">Stage payant <b>{offer.paying ? 'OUI' : 'NON'}</b></div>
-                      <div className="text-base text-[var(--color-dark)]">🗓️ Période du stage <b>{offer.startDate} - {offer.endDate}</b></div>
+                    <div className="flex flex-col gap-2 mb-2">
+                      <div className="text-base text-[var(--color-dark)]">Type de stage: <b>{offer.typeOfInternship || 'Non spécifié'}</b></div>
+                      <div className="text-base text-[var(--color-dark)]">Stage payant: <b>{offer.paying ? 'OUI' : 'NON'}</b></div>
+                      <div className="text-base text-[var(--color-dark)]">🗓️ Période du stage: <b>{offer.startDate} - {offer.endDate}</b></div>
                     </div>
                     <div className="flex flex-row flex-wrap gap-2 mb-2">
-                      {badges.map(b => (
-                        <span key={b} className="px-2 py-1 rounded-full text-xs font-medium bg-[#e1d3c1] text-[var(--color-vert)] border border-[var(--color-vert)]">{b}</span>
-                      ))}
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-[#e1d3c1] text-[var(--color-vert)] border border-[var(--color-vert)]">
+                        {offer.remote ? 'En remote' : 'En présentiel'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-[#e1d3c1] text-[var(--color-vert)] border border-[var(--color-vert)]">
+                        {offer.paying ? 'Payant' : 'Non payant'}
+                      </span>
                     </div>
                   </div>
                   
                   <div className="mb-6">
-                    <div className="text-lg font-semibold text-[var(--color-dark)] mb-1">Description de la mission</div>
+                    <div className="text-lg font-semibold text-[var(--color-dark)] mb-1">Description de la mission:</div>
                     <div className="text-base text-[var(--color-dark)] whitespace-pre-line">{offer.description}</div>
                   </div>
                   
                   <div className="mb-6">
-                    <div className="text-lg font-semibold text-[var(--color-dark)] mb-1">Convention de stage</div>
+                    <div className="text-lg font-semibold text-[var(--color-dark)] mb-1">Convention de stage:</div>
                     <button
                       onClick={handleDownloadConvention}
                       className="inline-flex items-center gap-2 mt-1 px-4 py-2 bg-[var(--color-vert)] text-white rounded shadow hover:bg-[var(--color-jaune)] hover:text-[var(--color-dark)] cursor-pointer"
@@ -218,16 +267,16 @@ const StageDetail: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-row gap-3 mt-2">
-                    {!hasApplied ? (
+                    {!isApplicationButtonDisabled(Number(id || 0), studentStatus) ? (
                       <button 
                         onClick={handleCandidaterClick}
-                        className="bg-[#e1d3c1] text-[var(--color-vert)] px-5 py-2 rounded-lg font-semibold hover:bg-[var(--color-jaune)] transition cursor-pointer"
+                        className="bg-[var(--color-vert)] text-[var(--color-light)] px-5 py-2 rounded-lg font-semibold cursor-pointer"
                       >
                         {showCandidatureForm ? 'Annuler' : 'Candidater'}
                       </button>
                     ) : (
                       <div className="bg-gray-200 text-gray-600 px-5 py-2 rounded-lg font-semibold">
-                        {hasApprovedApplication ? 'Candidature approuvée' : 'Déjà candidaté'}
+                        {getApplicationButtonText(Number(id || 0), studentStatus)}
                       </div>
                     )}
                     <button className="bg-white border border-[var(--color-jaune)] text-[var(--color-jaune)] px-5 py-2 rounded-lg font-semibold hover:bg-[var(--color-jaune)] hover:text-[var(--color-dark)] transition cursor-pointer">
@@ -237,19 +286,23 @@ const StageDetail: React.FC = () => {
                 </div>
                 
                 <div className="min-w-[260px] max-w-[320px] flex flex-col items-center p-5 mt-1">
-                  <img src={'/default-logo.png'} alt={offer.enterprise.name} className="h-20 w-20 rounded-full object-contain mb-2 border border-[#e1d3c1] bg-white" />
-                  <div className="text-base font-bold text-[var(--color-dark)] text-center mb-1">{offer.enterprise.name}</div>
+                  <EnterpriseLogo 
+                    enterpriseName={offer.enterprise.name}
+                    enterpriseId={offer.enterprise.id}
+                    hasLogo={offer.enterprise.hasLogo?.hasLogo}
+                    size="xl"
+                    className="mb-2"
+                  />
+                  <div className="text-base font-bold text-[var(--color-dark)] text-center mb-1">{offer.enterprise?.name || 'Entreprise'}</div>
                   <div className="flex flex-row gap-2 mb-1">
-                    <span role="img" aria-label="flag" className="text-xl">🇨🇲</span>
-                    <span className="text-xs text-[var(--color-dark)]">{offer.enterprise.country} • {offer.enterprise.city}</span>
+                    <span className="text-xs text-[var(--color-dark)]">{offer.enterprise?.country || 'Pays'} • {offer.enterprise?.city || 'Ville'}</span>
                   </div>
-                  <div className="text-xs text-[var(--color-dark)] mb-1">{offer.enterprise.sectorOfActivity || 'Entreprise de services'}</div>
-                  <div className="text-xs text-[var(--color-dark)] mb-1">Nombre de place <b>{places}</b></div>
-                  <div className="text-xs text-[var(--color-dark)] mb-1">Nombre de postulants <b>{postulants}</b></div>
-                  <div className="text-xs text-[var(--color-dark)] mb-1">Domaine <b>{offer.domain}</b></div>
+                  <div className="text-xs text-[var(--color-dark)] mb-1">{offer.enterprise?.sectorOfActivity || 'Secteur d\'activité'}</div>
+                  <div className="text-xs text-[var(--color-dark)] mb-1">Nombre de place <b>{offer.numberOfPlaces || '1'}</b></div>
+                  <div className="text-xs text-[var(--color-dark)] mb-1">Domaine <b>{offer.domain || 'Non spécifié'}</b></div>
                   <div className="flex flex-wrap gap-2 mt-2 mb-1 justify-center">
-                    {tags.map(t => (
-                      <span key={t} className="bg-[var(--color-vert)] text-white px-2 py-0.5 rounded-full text-xs border border-[var(--color-vert)]">{t}</span>
+                    {tags.map((t, index) => (
+                      <span key={index} className="bg-[var(--color-vert)] text-white px-2 py-0.5 rounded-full text-xs border border-[var(--color-vert)]">{t}</span>
                     ))}
                   </div>
                 </div>
@@ -389,6 +442,18 @@ const StageDetail: React.FC = () => {
             </div>
           )}
         </AnimatePresence>
+        
+        {modalConfig && (
+          <ConfirmationModal
+            isOpen={showModal}
+            title={modalConfig.title}
+            message={modalConfig.message}
+            type={modalConfig.type}
+            confirmText="OK"
+            onConfirm={() => setShowModal(false)}
+            onCancel={() => setShowModal(false)}
+          />
+        )}
       </div>
     </div>
   );
